@@ -6,14 +6,20 @@ if [ -z "$command_to_run" ]; then
 	exit
 fi
 
+echo "Converting to Windows path" >&2
+
 # Convert to Windows path
 sudo_dir="$(realpath "$(dirname "$0")")"
 backend="$sudo_dir/sudobackend"
+
+echo "Creating FIFOs" >&2
 
 fifoid="/tmp/.sudo.$RANDOM"
 mkfifo "$fifoid.finish"
 mkfifo "$fifoid.pidf"
 mkfifo "$fifoid.sigint"
+
+echo "FIFOs created" >&2
 
 echo "$command_to_run" >"$fifoid.command"
 
@@ -29,6 +35,8 @@ for fd in 0 1 2; do
 	fi
 done
 
+echo "Bypass FIFOs created" >&2
+
 # Get bash path
 pushd / >/dev/null 2>&1
 bash_path="$(pwd -W)bin/sh"
@@ -37,6 +45,8 @@ popd >/dev/null 2>&1
 function clean {
 	rm "$fifoid.finish" "$fifoid.sigint" "$fifoid.pidf" "$fifoid.command"
 
+	echo "Removing bypass FIFOs" >&2
+
 	# Remove stdin/stdout/stderr
 	for fd in 0 1 2; do
 		if [ ! -t $fd ]; then
@@ -44,8 +54,12 @@ function clean {
 		fi
 		rm "$fifoid.fd$fd"
 	done
+
+	echo "Done" >&2
 }
 trap clean EXIT
+
+echo "Trap set" >&2
 
 # Run command
 powershell.exe Start-Process \"$bash_path\" \"$backend\", \"$fifoid\", \"$(pwd)\" -Verb RunAs -WindowStyle Hidden 2>/dev/null
@@ -54,16 +68,24 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
+echo "Process spawned" >&2
+
 # Get pid
 pid=$(cat "$fifoid.pidf")
 
+echo "PID loaded" >&2
+
 # Wait
 trap "echo 1 >\"$fifoid.sigint\" && sleep 0.1" SIGINT
+
+echo "SIGINT trap set" >&2
 
 # Pass stdin fifo
 if [ ! -t 0 ]; then
 	( cat <&3 >"$fifoid.pipe0" & ) 3<&0
 fi
+
+echo "Stdin bypassed" >&2
 
 # Cat stdout and stderr
 for fd in 1 2; do
@@ -72,9 +94,15 @@ for fd in 1 2; do
 	fi
 done
 
+echo "Stdout/stderr bypassed" >&2
+
 while true; do
+	echo "Loading .finish" >&2
 	res=$(cat "$fifoid.finish")
+	echo "Loaded .finish" >&2
 	if [ ! -z "$res" ]; then
 		break
 	fi
 done
+
+echo "Finished" >&2
