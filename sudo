@@ -53,7 +53,7 @@ fi
 pid=$(cat "$fifoid.pidf")
 
 # Wait
-trap "echo 1 >\"$fifoid.sigint\" && sleep 0.1" SIGINT
+trap "echo 1 >\"$fifoid.sigint\" && sleep 1" SIGINT
 
 # Pass stdin fifo
 if [ ! -t 0 ]; then
